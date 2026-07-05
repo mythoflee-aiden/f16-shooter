@@ -1,5 +1,5 @@
 // F16 스카이 스트라이커 · 서비스워커 (오프라인 실행 지원)
-const CACHE = 'f16-shooter-v4';
+const CACHE = 'f16-shooter-v5';
 const ASSETS = [
   './',
   './index.html',
