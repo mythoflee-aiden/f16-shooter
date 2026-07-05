@@ -27,8 +27,8 @@ if('serviceWorker' in navigator){
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; user-select:none; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#000; touch-action:none; }
-  #wrap { position:relative; width:100%; height:100vh; height:100dvh; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; touch-action:none; margin:0; padding:0; }
+  #wrap { position:relative; width:100vw; height:100vh; height:100dvh; }
   canvas { display:block; width:100%; height:100%; background:linear-gradient(#03081a,#0a1a3a); }
 
   #hud { position:absolute; top:0; left:0; width:100%; padding:calc(8px + env(safe-area-inset-top)) 10px 8px; display:flex; justify-content:center; align-items:center; gap:5px; row-gap:4px; flex-wrap:wrap; font-family:'Segoe UI',Arial,sans-serif; color:#dff; pointer-events:none; z-index:5; }
@@ -106,7 +106,7 @@ if('serviceWorker' in navigator){
   #overlay { position:absolute; inset:0; background:rgba(2,6,20,0.92); display:flex; flex-direction:column; align-items:center; justify-content:flex-start; z-index:20; color:#fff; font-family:'Segoe UI',Arial,sans-serif; text-align:center; padding:calc(16px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom)); overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; }
   #overlay h1 { font-size:22px; margin:2px 0 6px; color:#7fdcff; text-shadow:0 0 12px rgba(90,180,255,0.8); letter-spacing:1.5px; }
   #overlay p { font-size:12.5px; color:#bcd; margin:4px 0; line-height:1.45; max-width:320px; }
-  #overlay button { margin-top:16px; padding:13px 32px; font-size:15px; font-weight:700; border:none; border-radius:30px; background:linear-gradient(180deg,#3ec1ff,#0f7fd6); color:#fff; box-shadow:0 4px 14px rgba(20,140,255,0.5); flex-shrink:0; }
+  #startBtn { margin-top:16px; padding:15px 40px; font-size:16px; font-weight:700; border:none; border-radius:30px; background:linear-gradient(180deg,#3ec1ff,#0f7fd6); color:#fff; box-shadow:0 4px 14px rgba(20,140,255,0.5); flex-shrink:0; position:relative; z-index:2; cursor:pointer; }
   #overlay .planeIcon { width:48px; height:48px; margin-bottom:2px; flex-shrink:0; }
   #diffSelect { margin-top:10px; width:100%; max-width:340px; flex-shrink:0; }
   #diffSelect .diffLabel { font-size:11px; color:#8fb3d9; letter-spacing:2px; margin-bottom:6px; }
@@ -595,11 +595,16 @@ const ctx = canvas.getContext('2d');
 let W, H, DPR;
 function resize(){
   DPR = Math.min(window.devicePixelRatio||1, 2);
-  W = canvas.clientWidth; H = canvas.clientHeight;
+  // clientWidth가 0으로 잡히는 순간을 방지: 뷰포트 실측값으로 폴백
+  W = canvas.clientWidth || window.innerWidth || document.documentElement.clientWidth;
+  H = canvas.clientHeight || window.innerHeight || document.documentElement.clientHeight;
   canvas.width = W*DPR; canvas.height = H*DPR;
   ctx.setTransform(DPR,0,0,DPR,0,0);
 }
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function(){ setTimeout(resize, 200); });
+// 로드 직후 레이아웃이 안정된 뒤 한 번 더 (초기 크기 오류 방지)
+window.addEventListener('load', function(){ setTimeout(resize, 100); });
 
 // ---------- difficulty ----------
 // 1=매우쉬움 ... 5=매우어려움 (전체적으로 기존보다 약 50% 완화된 값)
@@ -830,7 +835,7 @@ function setFocus(list, idx){
   if(list.length===0) return;
   focusIdx = (idx+list.length)%list.length;
   list[focusIdx].classList.add('tvfocus');
-  try { list[focusIdx].focus(); } catch(e){}
+  try { list[focusIdx].focus({preventScroll:true}); } catch(e){ try{ list[focusIdx].focus(); }catch(e2){} }
 }
 // 방향키를 메뉴 포커스 이동으로 사용할지 여부 (오버레이가 떠 있으면 true)
 function menuKeyNav(dir){
@@ -854,8 +859,12 @@ function menuActivate(){
   if(cur){ cur.click(); }
   return true;
 }
-// 오버레이가 나타날 때 첫 버튼에 포커스 부여
+// 오버레이가 나타날 때 첫 버튼에 포커스 부여 (TV 리모컨/키보드 전용)
+// 터치 기기에서는 자동 포커스를 건너뜀 (모바일 키보드 팝업·스크롤 방해 방지)
+let isTouchDevice = false;
+try { isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0; } catch(e){}
 function focusFirstInMenu(){
+  if(isTouchDevice) return; // 터치 기기는 자동 포커스 안 함
   setTimeout(()=>{
     const ov = menuOverlayVisible();
     if(!ov) return;
@@ -2228,7 +2237,7 @@ function showOverlay(title, desc, btnText){
   if(typeof updateInstallVisibility==='function') updateInstallVisibility();
 }
 
-document.getElementById('startBtn').addEventListener('click', ()=>{
+function startGame(){
   getNick(); // 닉네임 확정/저장
   document.getElementById('overlay').style.display='none';
   document.getElementById('diffBadge').textContent = 'LV.'+difficulty;
@@ -2239,7 +2248,9 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
   document.getElementById('installHint').style.display='none';
   showToast('STAGE '+stage+'  ·  '+PLANES[selectedPlane].name);
   startBGM();
-});
+}
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('startBtn').addEventListener('touchend', function(e){ e.preventDefault(); startGame(); }, {passive:false});
 
 // ---------- update ----------
 function update(){
